@@ -264,7 +264,7 @@ def main():
 
     del token_to_embedding_map
 
-    logger.info("Time to find embeddings for batch {}: {:} (h:mm:ss)".format(batch, format_time(time.time() - t0)))
+    logger.info("Time to find embeddings for batch {}: {:} (h:mm:ss)".format(step, format_time(time.time() - t0)))
 
   logger.info("Total time to complete the entire process: {:} (h:mm:ss)".format(format_time(time.time() - total_t0)))
 
