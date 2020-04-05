@@ -264,7 +264,7 @@ def main():
       for token, embedding in zip(tokens, embeddings_np):
         token_to_embedding_map[token].append(embedding)
 
-    with open(f'word_embeddings.pickle_{step}', 'wb') as handle:
+    with open(f'word_embeddings/word_embeddings.pickle_{step}', 'wb') as handle:
         pickle.dump(token_to_embedding_map, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     del token_to_embedding_map
