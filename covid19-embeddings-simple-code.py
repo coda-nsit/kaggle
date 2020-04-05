@@ -20,15 +20,15 @@ import GPUtil as GPU
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
-        format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S",
-        level=logging.INFO)
+  format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
+  datefmt="%m/%d/%Y %H:%M:%S",
+  level=logging.INFO)
 
 
 def printm():
   GPUs = GPU.getGPUs()
   gpu = GPUs[0]
-  logger.info("GPU RAM Free: {0:.0f}MB | Used: {1:.0f}MB | Util {2:3.0f}% | Total {3:.0f}MB".format(gpu.memoryFree, gpu.memoryUsed, gpu.memoryUtil*100, gpu.memoryTotal))
+  logger.info("GPU RAM Free: {0:.0f}MB | Used: {1:.0f}MB | Util {2:3.0f}% | Total {3:.0f}MB".format(gpu.memoryFree, gpu.memoryUsed, gpu.memoryUtil * 100, gpu.memoryTotal))
 
 
 def extract_data(data_dir):
@@ -120,13 +120,13 @@ def create_input_ids__attention_masks_tensor(data, tokenizer, max_seq_length):
     #   (5) Pad or truncate the sentence to `max_length`
     #   (6) Create attention masks for [PAD] tokens.
     encoded_dict = tokenizer.encode_plus(
-                        point,                        # Sentence to encode.
-                        add_special_tokens = True,    # Add '[CLS]' and '[SEP]'
-                        max_length = max_seq_length,  # Pad & truncate all sentences.
-                        pad_to_max_length = True,
-                        return_attention_mask = True, # Construct attn. masks.
-                        return_tensors = 'pt',        # Return pytorch tensors.
-                    )
+      point,  # Sentence to encode.
+      add_special_tokens=True,  # Add '[CLS]' and '[SEP]'
+      max_length=max_seq_length,  # Pad & truncate all sentences.
+      pad_to_max_length=True,
+      return_attention_mask=True,  # Construct attn. masks.
+      return_tensors='pt',  # Return pytorch tensors.
+    )
 
     # Add the encoded sentence to the list.
     input_ids.append(encoded_dict['input_ids'])
@@ -146,26 +146,26 @@ def main():
   parser = argparse.ArgumentParser()
 
   parser.add_argument(
-        "--data_dir",
-        default="extracted/",
-        type=str,
-        required=True,
-        help="The input data dir. Should contain the .json files (or other data files) for the task.")
+    "--data_dir",
+    default="extracted/",
+    type=str,
+    required=True,
+    help="The input data dir. Should contain the .json files (or other data files) for the task.")
 
   parser.add_argument("--have_input_data", action="store_true", help="Whether the input data is already stored in the form of Tensors")
 
   parser.add_argument(
-        "--max_seq_length",
-        default=128,
-        type=int,
-        help="The maximum total input sequence length after tokenization. Sequences longer "
-        "than this will be truncated, sequences shorter will be padded.")
+    "--max_seq_length",
+    default=128,
+    type=int,
+    help="The maximum total input sequence length after tokenization. Sequences longer "
+         "than this will be truncated, sequences shorter will be padded.")
 
   parser.add_argument(
-        "--batch_size",
-        default=16,
-        type=int,
-        help="The batch size to feed the model")
+    "--batch_size",
+    default=16,
+    type=int,
+    help="The batch size to feed the model")
 
   args = parser.parse_args()
 
@@ -174,6 +174,8 @@ def main():
   data = preprocess_data_to_df(json_files)
 
   abstracts = data["abstract"].to_list()
+  del data
+
   logger.info("total abstracts: %d", len(abstracts))
 
   if not args.have_input_data:
@@ -194,20 +196,9 @@ def main():
   batch_size = args.batch_size
 
   dataloader = DataLoader(
-      tensor_dataset,
-      sampler = SequentialSampler(tensor_dataset),
-      batch_size = batch_size)
-
-  optimizer = AdamW(model.parameters(),
-                    lr = 2e-5,
-                    eps = 1e-8)
-
-  total_steps = len(dataloader)
-
-  scheduler = get_linear_schedule_with_warmup(optimizer,
-                                              num_warmup_steps = 0, # Default value in run_glue.py
-                                              num_training_steps = total_steps)
-
+    tensor_dataset,
+    sampler=SequentialSampler(tensor_dataset),
+    batch_size=batch_size)
 
   device = torch.device("cuda")
   seed_val = 42
@@ -224,6 +215,8 @@ def main():
   logger.info('Forward pass...')
 
   model.eval()
+
+  token_to_embedding_map = defaultdict(list)
 
   for step, batch in enumerate(dataloader):
 
@@ -244,32 +237,39 @@ def main():
     # move everything to cpu to save GPU space
     b_input_ids_np = b_input_ids.cpu().numpy()
     b_input_mask_np = b_input_mask.cpu().numpy()
-    embeddings_np = embeddings.detach().cpu().numpy() 
+    embeddings_np = embeddings.detach().cpu().numpy()
     cls_np = cls.detach().cpu().numpy()
-    
+
     del b_input_ids
     del b_input_mask
     del embeddings
     del cls
     torch.cuda.empty_cache()
 
-    token_to_embedding_map = defaultdict(list)
     for batch_number in range(len(b_input_ids_np)):
       tokens = tokenizer.convert_ids_to_tokens(b_input_ids_np[batch_number])
       for token, embedding in zip(tokens, embeddings_np):
-        token_to_embedding_map[token].append(embedding)
-
-    with open(f'word_embeddings/word_embeddings.pickle_{step}', 'wb') as handle:
-        pickle.dump(token_to_embedding_map, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    del token_to_embedding_map
+        if token not in token_to_embedding_map:
+          token_to_embedding_map[token] = embedding
 
     logger.info("Time to find embeddings for batch {}: {:} (h:mm:ss)".format(step, format_time(time.time() - t0)))
+
+    if step % 100 == 0 and step > 0:
+      with open(f'word_embeddings/word_embeddings_{step}.pickle', 'wb') as handle:
+        pickle.dump(token_to_embedding_map, handle, protocol=pickle.HIGHEST_PROTOCOL)
+      del token_to_embedding_map
+      token_to_embedding_map = defaultdict(list)
+
+    del b_input_ids_np
+    del b_input_mask_np
+    del embeddings_np
+    del cls_np
 
   logger.info("Total time to complete the entire process: {:} (h:mm:ss)".format(format_time(time.time() - total_t0)))
 
   logger.info("\n")
   logger.info("Embeddings received!")
 
+
 if __name__ == "__main__":
-    main()
+  main()
