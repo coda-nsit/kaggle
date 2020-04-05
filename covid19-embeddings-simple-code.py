@@ -4,17 +4,12 @@ from collections import defaultdict
 import random
 import time
 import pickle
-import os
 import argparse
 import logging
 import datetime
-import humanize
-
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-
 
 import torch
 from torch.utils.data import TensorDataset, random_split, DataLoader, RandomSampler, SequentialSampler
@@ -259,8 +254,8 @@ def main():
     torch.cuda.empty_cache()
 
     token_to_embedding_map = defaultdict(list)
-    for batch in range(len(b_input_ids_np)):
-      tokens = tokenizer.convert_ids_to_tokens(b_input_ids_np[batch])
+    for batch_number in range(len(b_input_ids_np)):
+      tokens = tokenizer.convert_ids_to_tokens(b_input_ids_np[batch_number])
       for token, embedding in zip(tokens, embeddings_np):
         token_to_embedding_map[token].append(embedding)
 
@@ -271,10 +266,10 @@ def main():
 
     logger.info("Time to find embeddings for batch {}: {:} (h:mm:ss)".format(batch, format_time(time.time() - t0)))
 
-  logger.info("Total time to complete the entire process {}: {:} (h:mm:ss)".format(batch, format_time(time.time() - total_t0)))
+  logger.info("Total time to complete the entire process: {:} (h:mm:ss)".format(format_time(time.time() - total_t0)))
 
   logger.info("\n")
-  logger.info("Embeddings recieved!")
+  logger.info("Embeddings received!")
 
 if __name__ == "__main__":
     main()
