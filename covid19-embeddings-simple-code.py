@@ -29,6 +29,11 @@ nltk.download('stopwords')
 from nltk.corpus import stopwords
 stop_words = set(stopwords.words('english'))
 tokens_with_embeddings = set()
+seed_words = set()
+
+
+def add_seed_word(words):
+  seed_words.update(words)
 
 
 def printm():
@@ -173,8 +178,11 @@ def main():
     type=int,
     help="The batch size to feed the model")
 
+  parser.add_argument('--seed_words', nargs='+')
+
   args = parser.parse_args()
 
+  add_seed_word(args.seed_words)
   tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
   json_files = extract_data(args.data_dir)
   data = preprocess_data_to_df(json_files)
@@ -223,6 +231,7 @@ def main():
   model.eval()
 
   token_to_embedding_map = defaultdict(list)
+  seed_embeddings = defaultdict(list)
 
   for step, batch in enumerate(dataloader):
 
@@ -255,7 +264,9 @@ def main():
     for batch_number in range(len(b_input_ids_np)):
       tokens = tokenizer.convert_ids_to_tokens(b_input_ids_np[batch_number])
       for token, embedding in zip(tokens, embeddings_np):
-        if token not in token_to_embedding_map and token not in stop_words and token not in tokens_with_embeddings:
+        if token in seed_words and token not in seed_embeddings:
+          seed_embeddings[token] = embedding
+        elif token not in token_to_embedding_map and token not in stop_words and token not in tokens_with_embeddings:
           token_to_embedding_map[token] = embedding
           tokens_with_embeddings.add(token)
 
@@ -271,6 +282,11 @@ def main():
     del b_input_mask_np
     del embeddings_np
     del cls_np
+
+  # save the embeddings of the seed words
+  with open(f'word_embeddings/seed_embeddings_.pickle', 'wb') as handle:
+    pickle.dump(seed_embeddings, handle, protocol=pickle.HIGHEST_PROTOCOL)
+  del seed_embeddings
 
   logger.info("Total time to complete the entire process: {:} (h:mm:ss)".format(format_time(time.time() - total_t0)))
 
