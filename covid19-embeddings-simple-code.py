@@ -24,6 +24,12 @@ logging.basicConfig(
   datefmt="%m/%d/%Y %H:%M:%S",
   level=logging.INFO)
 
+import nltk
+nltk.download('stopwords')
+from nltk.corpus import stopwords
+stop_words = set(stopwords.words('english'))
+tokens_with_embeddings = set()
+
 
 def printm():
   GPUs = GPU.getGPUs()
@@ -249,8 +255,9 @@ def main():
     for batch_number in range(len(b_input_ids_np)):
       tokens = tokenizer.convert_ids_to_tokens(b_input_ids_np[batch_number])
       for token, embedding in zip(tokens, embeddings_np):
-        if token not in token_to_embedding_map:
+        if token not in token_to_embedding_map and token not in stop_words and token not in tokens_with_embeddings:
           token_to_embedding_map[token] = embedding
+          tokens_with_embeddings.add(token)
 
     logger.info("Time to find embeddings for batch {}: {:} (h:mm:ss)".format(step, format_time(time.time() - t0)))
 
