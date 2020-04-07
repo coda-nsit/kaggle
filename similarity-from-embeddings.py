@@ -1,5 +1,5 @@
 """
-python3 similarity-from-embeddings.py --data_dir word_embeddings/ --distance_metric cosine --k_similar 10 --output_dir similar_words
+python3 similarity-from-embeddings.py --data_dir whole_dataset_biobert --distance_metric cosine --output_file closest_word_to_embeddings_whole_dataset_biobert --k_similar 1000
 
 no need to run this file as a sbatch command. It doesn't make use of GPU
 """
@@ -29,7 +29,7 @@ def get_embeddings_for_seed_words(file_name):
 
 
 # returns the distance of <token> from all the seed words
-def distance_from_seeds(distance_metric, token, seed_to_embedding, token_to_embedding):
+def similarity_with_seeds(distance_metric, token, seed_to_embedding, token_to_embedding):
   dist = 0
   for seed, seed_embedding in seed_to_embedding.items():
     dist += distance_metric(seed_embedding.reshape(1, -1), token_to_embedding[token].reshape(1, -1))
@@ -41,13 +41,13 @@ def main():
 
   parser.add_argument(
     "--data_dir",
-    default="word_embeddings/",
+    default="whole_dataset",
     type=str,
     required=True,
     help="The directory storing the word embeddings of the tokens (as python dictionary {token : embedding}) in pickle format")
 
   parser.add_argument(
-    "--output_dir",
+    "--output_file",
     default="similar_words/",
     type=str,
     required=True,
@@ -77,8 +77,8 @@ def main():
   # stores only those tokens as the key which are in the priority queue
   token_to_embedding_pq_words = {}
 
-  token_to_embeddings_files = glob.glob(args.data_dir + "word_embeddings_*.pickle")
-  seed_to_embedding = get_embeddings_for_seed_words(os.path.join(args.data_dir, "seed_embeddings_.pickle"))
+  token_to_embeddings_files = glob.glob(f"word_embeddings/{args.data_dir}/word_embeddings_*.pickle")
+  seed_to_embedding = get_embeddings_for_seed_words(os.path.join("word_embeddings", args.data_dir, "seed_embeddings_.pickle"))
 
   pq = PriorityQueue(k)
 
@@ -99,28 +99,29 @@ def main():
         continue
 
       if pq.full() is True:
-        most_far_word_distance, most_far_word = pq.get()
+        most_far_word_similarity, most_far_word = pq.get()
         token_to_embedding_pq_words.pop(most_far_word)
 
-        dist_current_token = distance_from_seeds(distance_metric, token, seed_to_embedding, token_to_embedding)
-        if dist_current_token > most_far_word_distance:
-          pq.put((most_far_word_distance, most_far_word))
+        similarity_current_token = similarity_with_seeds(distance_metric, token, seed_to_embedding, token_to_embedding)
+        if similarity_current_token < most_far_word_similarity:
+          pq.put((most_far_word_similarity, most_far_word))
           token_to_embedding_pq_words[most_far_word] = token_to_embedding[most_far_word]
         else:
-          pq.put((dist_current_token, token))
+          pq.put((similarity_current_token, token))
           token_to_embedding_pq_words[token] = embedding
 
       else:
-        dist = distance_from_seeds(distance_metric, token, seed_to_embedding, token_to_embedding)
-        pq.put((dist, token))
+        similarity_current_token = similarity_with_seeds(distance_metric, token, seed_to_embedding, token_to_embedding)
+        pq.put((similarity_current_token, token))
         token_to_embedding_pq_words[token] = embedding
 
-  with open(f'{args.output_dir}/closest_word_to_embeddings.pickle', 'wb') as handle:
+  with open(f'similar_words/{args.output_file}.pickle', 'wb') as handle:
     pickle.dump(token_to_embedding_pq_words, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
   while pq.empty() is False:
     dist, word = pq.get()
     logger.info("%s %f", word, dist)
+
 
 if __name__ == "__main__":
   main()

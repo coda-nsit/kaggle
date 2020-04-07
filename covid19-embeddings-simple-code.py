@@ -1,5 +1,6 @@
 import glob
 import json
+import os
 from collections import defaultdict
 import random
 import time
@@ -12,9 +13,9 @@ import pandas as pd
 import numpy as np
 
 import torch
-from torch.utils.data import TensorDataset, random_split, DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import TensorDataset, DataLoader, SequentialSampler
 
-from transformers import BertTokenizer, BertModel, BertForSequenceClassification, AdamW, BertConfig, get_linear_schedule_with_warmup
+from transformers import BertTokenizer, BertModel, BertForSequenceClassification, BertConfig
 
 import GPUtil as GPU
 
@@ -42,17 +43,24 @@ def printm():
   logger.info("GPU RAM Free: {0:.0f}MB | Used: {1:.0f}MB | Util {2:3.0f}% | Total {3:.0f}MB".format(gpu.memoryFree, gpu.memoryUsed, gpu.memoryUtil * 100, gpu.memoryTotal))
 
 
-def extract_data(data_dir):
-  json_files = glob.glob(data_dir + "biorxiv_medrxiv/pdf_json/*.json")
-  json_files.extend(glob.glob(data_dir + "comm_use_subset/pdf_json/*.json"))
-  json_files.extend(glob.glob(data_dir + "comm_use_subset/pmc_json/*.json"))
-  json_files.extend(glob.glob(data_dir + "custom_license/pdf_json/*.json"))
-  json_files.extend(glob.glob(data_dir + "custom_license/pmc_json/*.json"))
-  json_files.extend(glob.glob(data_dir + 'noncomm_use_subset/pdf_json/*.json'))
-  json_files.extend(glob.glob(data_dir + 'noncomm_use_subset/pmc_json/*.json'))
-  logger.info(" sample json file name: %s", str(json_files[0]))
-  logger.info(" total json files available in dataset: %d", len(json_files))
-  return json_files
+def extract_data(data_dir, filter_file_name):
+  json_file_names = glob.glob(data_dir + "biorxiv_medrxiv/pdf_json/*.json")
+  json_file_names.extend(glob.glob(data_dir + "comm_use_subset/pdf_json/*.json"))
+  json_file_names.extend(glob.glob(data_dir + "comm_use_subset/pmc_json/*.json"))
+  json_file_names.extend(glob.glob(data_dir + "custom_license/pdf_json/*.json"))
+  json_file_names.extend(glob.glob(data_dir + "custom_license/pmc_json/*.json"))
+  json_file_names.extend(glob.glob(data_dir + 'noncomm_use_subset/pdf_json/*.json'))
+  json_file_names.extend(glob.glob(data_dir + 'noncomm_use_subset/pmc_json/*.json'))
+
+  if filter_file_name is not None:
+    with open(filter_file_name, "r") as f:
+      file_names = f.readlines()[0].split(", ")
+    filter_set = set([file_name + ".json" for file_name in file_names])
+    json_file_names = list(filter(lambda x: os.path.split(x)[1] in filter_set, json_file_names))
+
+  logger.info(" sample json file name: %s", str(json_file_names[0]))
+  logger.info(" total json files available in dataset: %d", len(json_file_names))
+  return json_file_names
 
 
 def preprocess_data_to_df(json_files):
@@ -163,6 +171,27 @@ def main():
     required=True,
     help="The input data dir. Should contain the .json files (or other data files) for the task.")
 
+  parser.add_argument(
+    "--out_dir",
+    default="extracted/",
+    type=str,
+    required=True,
+    help="The directory where the output embeddings will be stored as a pickled dictionary")
+
+  parser.add_argument(
+    "--filter_file",
+    default=None,
+    type=str,
+    required=False,
+    help="The input path to file which contains the names of files which should only be considered out of the entire dataset.")
+
+  parser.add_argument(
+    "--model_path",
+    default=None,
+    type=str,
+    required=False,
+    help="The path to the .bin transformer model.")
+
   parser.add_argument("--have_input_data", action="store_true", help="Whether the input data is already stored in the form of Tensors")
 
   parser.add_argument(
@@ -184,7 +213,7 @@ def main():
 
   add_seed_word(args.seed_words)
   tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
-  json_files = extract_data(args.data_dir)
+  json_files = extract_data(args.data_dir, args.filter_file)
   data = preprocess_data_to_df(json_files)
 
   abstracts = data["abstract"].to_list()
@@ -202,7 +231,11 @@ def main():
   logger.info('Original: %s', str(abstracts[0]))
   logger.info('Token IDs: %s', str(input_ids[0]))
 
-  model = BertModel.from_pretrained("bert-base-cased")
+  if args.model_path is None:
+    model = BertModel.from_pretrained("bert-base-cased")
+  else:
+    configuration = BertConfig.from_json_file(f"{args.model_path}/bert_config.json")
+    model = BertModel.from_pretrained(f"{args.model_path}/pytorch_model.bin", config=configuration)
   model.cuda()
 
   tensor_dataset = TensorDataset(input_ids, attention_masks)
@@ -271,8 +304,8 @@ def main():
           token_to_embedding_map[token] = embedding
           tokens_with_embeddings.add(token)
 
-    if step % 500 == 0 and step > 0:
-      with open(f'word_embeddings/word_embeddings_{step}.pickle', 'wb') as handle:
+    if step % 200 == 0 and step > 0:
+      with open(f'word_embeddings/{args.out_dir}/word_embeddings_{step}.pickle', 'wb') as handle:
         pickle.dump(token_to_embedding_map, handle, protocol=pickle.HIGHEST_PROTOCOL)
       del token_to_embedding_map
       token_to_embedding_map = defaultdict(list)
@@ -285,7 +318,7 @@ def main():
     del cls_np
 
   # save the embeddings of the seed words
-  with open(f'word_embeddings/seed_embeddings_.pickle', 'wb') as handle:
+  with open(f'word_embeddings/{args.out_dir}/seed_embeddings_.pickle', 'wb') as handle:
     pickle.dump(seed_embeddings, handle, protocol=pickle.HIGHEST_PROTOCOL)
   del seed_embeddings
 
