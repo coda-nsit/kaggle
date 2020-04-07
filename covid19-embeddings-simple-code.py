@@ -263,7 +263,7 @@ def main():
 
     for batch_number in range(len(b_input_ids_np)):
       tokens = tokenizer.convert_ids_to_tokens(b_input_ids_np[batch_number])
-      for token, embedding in zip(tokens, embeddings_np):
+      for token, embedding in zip(tokens, embeddings_np[batch_number]):
         if token in seed_words and token not in seed_embeddings:
           seed_embeddings[token] = embedding
         elif token not in token_to_embedding_map and token not in stop_words and token not in tokens_with_embeddings:
