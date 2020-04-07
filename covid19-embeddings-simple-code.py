@@ -232,10 +232,11 @@ def main():
 
   token_to_embedding_map = defaultdict(list)
   seed_embeddings = defaultdict(list)
+  t0 = time.time()
 
   for step, batch in enumerate(dataloader):
 
-    t0 = time.time()
+
     if step % 100 == 0:
       logger.info('======== Batch {:} / {:} ========'.format(step, len(dataloader)))
 
@@ -271,11 +272,12 @@ def main():
           tokens_with_embeddings.add(token)
 
     if step % 500 == 0 and step > 0:
-      logger.info("Time to find embeddings for batch {}: {:} (h:mm:ss)".format(step, format_time(time.time() - t0)))
       with open(f'word_embeddings/word_embeddings_{step}.pickle', 'wb') as handle:
         pickle.dump(token_to_embedding_map, handle, protocol=pickle.HIGHEST_PROTOCOL)
       del token_to_embedding_map
       token_to_embedding_map = defaultdict(list)
+      logger.info("Time to find embeddings for batches {} to {}: {:} (h:mm:ss)".format(max(0, step - 500), step, format_time(time.time() - t0)))
+      t0 = time.time()
 
     del b_input_ids_np
     del b_input_mask_np
