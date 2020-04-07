@@ -270,7 +270,7 @@ def main():
           token_to_embedding_map[token] = embedding
           tokens_with_embeddings.add(token)
 
-    if step % 100 == 0 and step > 0:
+    if step % 500 == 0 and step > 0:
       logger.info("Time to find embeddings for batch {}: {:} (h:mm:ss)".format(step, format_time(time.time() - t0)))
       with open(f'word_embeddings/word_embeddings_{step}.pickle', 'wb') as handle:
         pickle.dump(token_to_embedding_map, handle, protocol=pickle.HIGHEST_PROTOCOL)
