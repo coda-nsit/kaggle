@@ -124,12 +124,13 @@ def format_time(elapsed):
 
 def create_input_ids__attention_masks_tensor(data, tokenizer, max_seq_length):
   # Tokenize all of the sentences and map the tokens to their word IDs.
-  abstracts = data["abstract"]
+  abstracts = data["abstract"].values
   paper_ids = data["paper_id"].values
+  paper_ids_with_abstracts = []
   input_ids = []
   attention_masks = []
 
-  for idx, point in enumerate(abstracts):
+  for idx, (paper_id, point) in enumerate(zip(paper_ids, abstracts)):
     if len(point) == 0:
       continue
 
@@ -155,14 +156,16 @@ def create_input_ids__attention_masks_tensor(data, tokenizer, max_seq_length):
     # And its attention mask (simply differentiates padding from non-padding).
     attention_masks.append(encoded_dict['attention_mask'])
 
+    paper_ids_with_abstracts.append(paper_id)
+
   # Convert the lists into tensors.
   input_ids = torch.cat(input_ids, dim=0)
   attention_masks = torch.cat(attention_masks, dim=0)
   torch.save(input_ids, 'input_ids.pt')
   torch.save(attention_masks, 'attention_masks.pt')
   with open(f'paper_ids.pickle', 'wb') as handle:
-    pickle.dump(paper_ids, handle, protocol=pickle.HIGHEST_PROTOCOL)
-  return input_ids, attention_masks, paper_ids
+    pickle.dump(paper_ids_with_abstracts, handle, protocol=pickle.HIGHEST_PROTOCOL)
+  return input_ids, attention_masks, paper_ids_with_abstracts
 
 
 def main():
