@@ -123,7 +123,8 @@ def format_time(elapsed):
 
 
 def create_input_ids__attention_masks_tensor(data, tokenizer, max_seq_length):
-  # Tokenize all of the sentences and map the tokens to thier word IDs.
+  # Tokenize all of the sentences and map the tokens to their word IDs.
+  paper_ids = data["paper_id"].values
   input_ids = []
   attention_masks = []
 
@@ -158,7 +159,9 @@ def create_input_ids__attention_masks_tensor(data, tokenizer, max_seq_length):
   attention_masks = torch.cat(attention_masks, dim=0)
   torch.save(input_ids, 'input_ids.pt')
   torch.save(attention_masks, 'attention_masks.pt')
-  return input_ids, attention_masks
+  with open(f'paper_ids.pickle', 'wb') as handle:
+    pickle.dump(paper_ids, handle, protocol=pickle.HIGHEST_PROTOCOL)
+  return input_ids, attention_masks, paper_ids
 
 
 def main():
@@ -213,22 +216,21 @@ def main():
 
   add_seed_word(args.seed_words)
   tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
-  json_files = extract_data(args.data_dir, args.filter_file)
-  data = preprocess_data_to_df(json_files)
-
-  abstracts = data["abstract"].to_list()
-  del data
-
-  logger.info("total abstracts: %d", len(abstracts))
 
   if not args.have_input_data:
-    input_ids, attention_masks = create_input_ids__attention_masks_tensor(abstracts, tokenizer, args.max_seq_length)
+    json_files = extract_data(args.data_dir, args.filter_file)
+    data = preprocess_data_to_df(json_files)
+
+    abstracts = data["abstract"].to_list()
+    logger.info("total abstracts: %d", len(abstracts))
+    logger.info('Original: %s', str(abstracts[0]))
+    del data
+    input_ids, attention_masks, _ = create_input_ids__attention_masks_tensor(abstracts, tokenizer, args.max_seq_length)
   else:
     input_ids = torch.load("input_ids.pt")
     attention_masks = torch.load("attention_masks.pt")
 
   logger.info("%s", str(input_ids.shape))
-  logger.info('Original: %s', str(abstracts[0]))
   logger.info('Token IDs: %s', str(input_ids[0]))
 
   if args.model_path is None:
