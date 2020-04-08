@@ -133,6 +133,7 @@ def main():
 
   model.eval()
 
+  paper_ids_to_cosine_score = {}
   for step, batch in enumerate(dataloader):
     if step % 100 == 0:
       logger.info('======== Batch {:} / {:} ========'.format(step, len(dataloader)))
@@ -162,7 +163,6 @@ def main():
     del cls
     torch.cuda.empty_cache()
 
-    paper_ids_to_cosine_score = {}
     for batch_number in range(len(embeddings_np)):
       abstract_cosine_score = np.average(cosine_similarity(embeddings_np[batch_number], similar_token_to_embedding))
       paper_id = paper_ids_np[batch_number]
