@@ -124,11 +124,12 @@ def format_time(elapsed):
 
 def create_input_ids__attention_masks_tensor(data, tokenizer, max_seq_length):
   # Tokenize all of the sentences and map the tokens to their word IDs.
+  abstracts = data["abstract"]
   paper_ids = data["paper_id"].values
   input_ids = []
   attention_masks = []
 
-  for idx, point in enumerate(data):
+  for idx, point in enumerate(abstracts):
     if len(point) == 0:
       continue
 
@@ -224,11 +225,11 @@ def main():
     abstracts = data["abstract"].to_list()
     logger.info("total abstracts: %d", len(abstracts))
     logger.info('Original: %s', str(abstracts[0]))
+    input_ids, attention_masks, _ = create_input_ids__attention_masks_tensor(data, tokenizer, args.max_seq_length)
     del data
-    input_ids, attention_masks, _ = create_input_ids__attention_masks_tensor(abstracts, tokenizer, args.max_seq_length)
   else:
-    input_ids = torch.load("input_ids.pt")
-    attention_masks = torch.load("attention_masks.pt")
+    input_ids = torch.load(f"inputs/{args.data_dir}/input_ids.pt")
+    attention_masks = torch.load(f"inputs/{args.data_dir}/attention_masks.pt")
 
   logger.info("%s", str(input_ids.shape))
   logger.info('Token IDs: %s', str(input_ids[0]))
