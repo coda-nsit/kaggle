@@ -44,13 +44,13 @@ def printm():
 
 
 def extract_data(data_dir, filter_file_name):
-  json_file_names = glob.glob(data_dir + "biorxiv_medrxiv/pdf_json/*.json")
-  json_file_names.extend(glob.glob(data_dir + "comm_use_subset/pdf_json/*.json"))
-  json_file_names.extend(glob.glob(data_dir + "comm_use_subset/pmc_json/*.json"))
-  json_file_names.extend(glob.glob(data_dir + "custom_license/pdf_json/*.json"))
-  json_file_names.extend(glob.glob(data_dir + "custom_license/pmc_json/*.json"))
-  json_file_names.extend(glob.glob(data_dir + 'noncomm_use_subset/pdf_json/*.json'))
-  json_file_names.extend(glob.glob(data_dir + 'noncomm_use_subset/pmc_json/*.json'))
+  json_file_names = glob.glob(data_dir + "/biorxiv_medrxiv/pdf_json/*.json")
+  json_file_names.extend(glob.glob(data_dir + "/comm_use_subset/pdf_json/*.json"))
+  json_file_names.extend(glob.glob(data_dir + "/comm_use_subset/pmc_json/*.json"))
+  json_file_names.extend(glob.glob(data_dir + "/custom_license/pdf_json/*.json"))
+  json_file_names.extend(glob.glob(data_dir + "/custom_license/pmc_json/*.json"))
+  json_file_names.extend(glob.glob(data_dir + '/noncomm_use_subset/pdf_json/*.json'))
+  json_file_names.extend(glob.glob(data_dir + '/noncomm_use_subset/pmc_json/*.json'))
 
   if filter_file_name is not None:
     with open(filter_file_name, "r") as f:
@@ -306,14 +306,19 @@ def main():
     for batch_number in range(len(b_input_ids_np)):
       tokens = tokenizer.convert_ids_to_tokens(b_input_ids_np[batch_number])
       for token, embedding in zip(tokens, embeddings_np[batch_number]):
-        if token in seed_words and token not in seed_embeddings:
-          seed_embeddings[token] += embedding
-          token_to_embedding_map[token] += embedding
-          token_count[token] += 1
-        elif token not in token_to_embedding_map and token not in stop_words and token not in tokens_with_embeddings:
-          token_to_embedding_map[token] += embedding
+        # add the seed word to the seed dict
+        if token in seed_words:
+          if token not in seed_embeddings:
+            seed_embeddings[token] = embedding
+          else:
+            seed_embeddings[token] += embedding
+        # every token including seed should also be added to token_to_embedding_map
+        if token not in token_to_embedding_map and token not in stop_words:
+          token_to_embedding_map[token] = embedding
           tokens_with_embeddings.add(token)
-          token_count[token] += 1
+        elif token not in stop_words:
+          token_to_embedding_map[token] += embedding
+        token_count[token] += 1
 
     if step % 200 == 0 and step > 0:
       # with open(f'word_embeddings/{args.out_dir}/word_embeddings_{step}.pickle', 'wb') as handle:
