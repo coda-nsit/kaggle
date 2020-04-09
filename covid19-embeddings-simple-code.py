@@ -271,6 +271,8 @@ def main():
 
   token_to_embedding_map = defaultdict(list)
   seed_embeddings = defaultdict(list)
+  # number of times a token is encountered: needed to maintain the average
+  token_count = defaultdict(int)
   t0 = time.time()
 
   for step, batch in enumerate(dataloader):
@@ -305,16 +307,19 @@ def main():
       tokens = tokenizer.convert_ids_to_tokens(b_input_ids_np[batch_number])
       for token, embedding in zip(tokens, embeddings_np[batch_number]):
         if token in seed_words and token not in seed_embeddings:
-          seed_embeddings[token] = embedding
+          seed_embeddings[token] += embedding
+          token_to_embedding_map[token] += embedding
+          token_count[token] += 1
         elif token not in token_to_embedding_map and token not in stop_words and token not in tokens_with_embeddings:
-          token_to_embedding_map[token] = embedding
+          token_to_embedding_map[token] += embedding
           tokens_with_embeddings.add(token)
+          token_count[token] += 1
 
     if step % 200 == 0 and step > 0:
-      with open(f'word_embeddings/{args.out_dir}/word_embeddings_{step}.pickle', 'wb') as handle:
-        pickle.dump(token_to_embedding_map, handle, protocol=pickle.HIGHEST_PROTOCOL)
-      del token_to_embedding_map
-      token_to_embedding_map = defaultdict(list)
+      # with open(f'word_embeddings/{args.out_dir}/word_embeddings_{step}.pickle', 'wb') as handle:
+      #   pickle.dump(token_to_embedding_map, handle, protocol=pickle.HIGHEST_PROTOCOL)
+      # del token_to_embedding_map
+      # token_to_embedding_map = defaultdict(list)
       logger.info("Time to find embeddings for batches {} to {}: {:} (h:mm:ss)".format(max(0, step - 500), step, format_time(time.time() - t0)))
       t0 = time.time()
 
@@ -323,10 +328,20 @@ def main():
     del embeddings_np
     del cls_np
 
+
   # save the embeddings of the seed words
-  with open(f'word_embeddings/{args.out_dir}/seed_embeddings_.pickle', 'wb') as handle:
+  for token, embedding in seed_embeddings:
+    seed_embeddings[token] = embedding / (token_count[token] * 1.0)
+  with open(f'word_embeddings/{args.out_dir}/seed_embeddings_averaged.pickle', 'wb') as handle:
     pickle.dump(seed_embeddings, handle, protocol=pickle.HIGHEST_PROTOCOL)
   del seed_embeddings
+
+  # save the word embeddings
+  for token, embedding in token_to_embedding_map:
+    token_to_embedding_map[token] = embedding / (token_count[token] * 1.0)
+  with open(f'word_embeddings/{args.out_dir}/word_embeddings_averaged.pickle', 'wb') as handle:
+    pickle.dump(token_to_embedding_map, handle, protocol=pickle.HIGHEST_PROTOCOL)
+  del token_to_embedding_map
 
   logger.info("Total time to complete the entire process: {:} (h:mm:ss)".format(format_time(time.time() - total_t0)))
 
