@@ -320,11 +320,11 @@ def main():
           token_to_embedding_map[token] += embedding
         token_count[token] += 1
 
-    if step % 200 == 0 and step > 0:
-      # with open(f'word_embeddings/{args.out_dir}/word_embeddings_{step}.pickle', 'wb') as handle:
-      #   pickle.dump(token_to_embedding_map, handle, protocol=pickle.HIGHEST_PROTOCOL)
-      # del token_to_embedding_map
-      # token_to_embedding_map = defaultdict(list)
+    if step % 1000 == 0 and step > 0:
+      with open(f'word_embeddings/{args.out_dir}/word_embeddings_averaged_{step}.pickle', 'wb') as handle:
+        pickle.dump(token_to_embedding_map, handle, protocol=pickle.HIGHEST_PROTOCOL)
+      del token_to_embedding_map
+      token_to_embedding_map = defaultdict(list)
       logger.info("Time to find embeddings for batches {} to {}: {:} (h:mm:ss)".format(max(0, step - 500), step, format_time(time.time() - t0)))
       t0 = time.time()
 
@@ -335,18 +335,23 @@ def main():
 
 
   # save the embeddings of the seed words
-  for token, embedding in seed_embeddings:
+  for token, embedding in seed_embeddings.items():
     seed_embeddings[token] = embedding / (token_count[token] * 1.0)
   with open(f'word_embeddings/{args.out_dir}/seed_embeddings_averaged.pickle', 'wb') as handle:
     pickle.dump(seed_embeddings, handle, protocol=pickle.HIGHEST_PROTOCOL)
   del seed_embeddings
 
-  # save the word embeddings
-  for token, embedding in token_to_embedding_map:
-    token_to_embedding_map[token] = embedding / (token_count[token] * 1.0)
-  with open(f'word_embeddings/{args.out_dir}/word_embeddings_averaged.pickle', 'wb') as handle:
+  ## save the word embeddings
+  # for token, embedding in token_to_embedding_map:
+  #   token_to_embedding_map[token] = embedding / (token_count[token] * 1.0)
+  with open(f'word_embeddings/{args.out_dir}/word_embeddings_averaged_{step}.pickle', 'wb') as handle:
     pickle.dump(token_to_embedding_map, handle, protocol=pickle.HIGHEST_PROTOCOL)
   del token_to_embedding_map
+
+  # save the number of times each token occurs
+  with open(f'inputs/{args.data_dir}/token_count.pickle', 'wb') as handle:
+    pickle.dump(token_count, handle, protocol=pickle.HIGHEST_PROTOCOL)
+  del token_count
 
   logger.info("Total time to complete the entire process: {:} (h:mm:ss)".format(format_time(time.time() - total_t0)))
 

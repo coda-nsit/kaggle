@@ -1,15 +1,20 @@
 """
-python3 similarity-from-embeddings.py --data_dir whole_dataset_biobert --distance_metric cosine --output_file closest_word_to_embeddings_whole_dataset_biobert --k_similar 1000
-
 no need to run this file as a sbatch command. It doesn't make use of GPU
+
+Creates a pickle file that stores a dictionary, with the <k_similar> words that have
+the minimum cosine similarity with the seed words.
+The dictionary is {token: embedding}
 """
 
 import argparse
 import glob
 import pickle
 import os
+from collections import defaultdict
 from queue import PriorityQueue
+
 from sklearn.metrics.pairwise import cosine_similarity
+import torch
 
 import logging
 logger = logging.getLogger(__name__)
@@ -34,6 +39,23 @@ def similarity_with_seeds(distance_metric, token, seed_to_embedding, token_to_em
   for seed, seed_embedding in seed_to_embedding.items():
     dist += distance_metric(seed_embedding.reshape(1, -1), token_to_embedding[token].reshape(1, -1))
   return dist
+
+
+# takes the sharded dictionaries of {token: sum of embeddings} and converts them into a single dict
+def get_combined_embeddings(token_to_embeddings_files, token_frequencies):
+  combined_token_to_embeddings = defaultdict(torch.tensor)
+  for token_to_embeddings_file in token_to_embeddings_files:
+    with open(token_to_embeddings_file, "rb") as f:
+      token_to_embeddings = pickle.load(f)
+    for token, embedding in token_to_embeddings.items():
+      if token in combined_token_to_embeddings:
+        combined_token_to_embeddings[token] += embedding
+      else:
+        combined_token_to_embeddings[token] = embedding
+  for token, embedding in combined_token_to_embeddings.items():
+    combined_token_to_embeddings[token] = embedding / float(token_frequencies[token])
+  return combined_token_to_embeddings
+
 
 
 def main():
@@ -67,6 +89,13 @@ def main():
     required=True,
     help="The number of similar words needed.")
 
+  parser.add_argument(
+    "--all_tokens_dir",
+    default="inputs",
+    type=str,
+    required=True,
+    help="The directory which contains the file which stores the dictionary containing the frequency count of the words")
+
   args = parser.parse_args()
   k = args.k_similar
 
@@ -77,43 +106,44 @@ def main():
   # stores only those tokens as the key which are in the priority queue
   token_to_embedding_pq_words = {}
 
-  token_to_embeddings_files = glob.glob(f"word_embeddings/{args.data_dir}/word_embeddings_*.pickle")
+  token_to_embeddings_files = glob.glob(f"word_embeddings/{args.data_dir}/word_embeddings_averaged_*.pickle")
   seed_to_embedding = get_embeddings_for_seed_words(os.path.join("word_embeddings", args.data_dir, "seed_embeddings_.pickle"))
 
   pq = PriorityQueue(k)
 
   logger.info("seed tokens are %s", str(list(seed_to_embedding.keys())))
 
+  with open(f"{args.all_tokens_dir}/token_count.pickle", "rb") as f:
+    token_frequencies = pickle.load(f)
+
+  combined_token_to_embeddings = get_combined_embeddings(token_to_embeddings_files, token_frequencies)
+
   '''
   for every token:
     find cosine similarity with the seed tokens
     keep the k most similar words
   '''
-  for token_to_embeddings_file in token_to_embeddings_files:
-    with open(token_to_embeddings_file, "rb") as f:
-      token_to_embedding = pickle.load(f)
+  for token, embedding in list(combined_token_to_embeddings.items()):
+    # don't consider seed words
+    # if token in seed_to_embedding:
+    #   continue
 
-    for token, embedding in list(token_to_embedding.items()):
-      # don't consider seed words
-      if token in seed_to_embedding:
-        continue
+    if pq.full() is True:
+      most_far_word_similarity, most_far_word = pq.get()
+      token_to_embedding_pq_words.pop(most_far_word)
 
-      if pq.full() is True:
-        most_far_word_similarity, most_far_word = pq.get()
-        token_to_embedding_pq_words.pop(most_far_word)
-
-        similarity_current_token = similarity_with_seeds(distance_metric, token, seed_to_embedding, token_to_embedding)
-        if similarity_current_token < most_far_word_similarity:
-          pq.put((most_far_word_similarity, most_far_word))
-          token_to_embedding_pq_words[most_far_word] = token_to_embedding[most_far_word]
-        else:
-          pq.put((similarity_current_token, token))
-          token_to_embedding_pq_words[token] = embedding
-
+      similarity_current_token = similarity_with_seeds(distance_metric, token, seed_to_embedding, combined_token_to_embeddings)
+      if similarity_current_token < most_far_word_similarity:
+        pq.put((most_far_word_similarity, most_far_word))
+        token_to_embedding_pq_words[most_far_word] = combined_token_to_embeddings[most_far_word]
       else:
-        similarity_current_token = similarity_with_seeds(distance_metric, token, seed_to_embedding, token_to_embedding)
         pq.put((similarity_current_token, token))
         token_to_embedding_pq_words[token] = embedding
+
+    else:
+      similarity_current_token = similarity_with_seeds(distance_metric, token, seed_to_embedding, combined_token_to_embeddings)
+      pq.put((similarity_current_token, token))
+      token_to_embedding_pq_words[token] = embedding
 
   with open(f'similar_words/{args.output_file}.pickle', 'wb') as handle:
     pickle.dump(token_to_embedding_pq_words, handle, protocol=pickle.HIGHEST_PROTOCOL)
