@@ -1,3 +1,14 @@
+"""
+Gives the document scores based on how much of their abstracts is similar to the words similar to seed words.
+
+1. Read the tokens (that are similar to the seed words) and their embeddings from "similar_words/"
+2. Read the input_ids generated from covid-embeddings-simple-code.py from "inputs/" folder
+3. Read the attention_masks generated from covid-embeddings-simple-code.py from "inputs/" folder
+4. Read the paper_ids of paper with abstracts generated from covid-embeddings-simple-code.py from "inputs/" folder
+5. Writes a dictionary of the format {paper_id: score} in "document_scores/" folder
+
+similar_words/, inputs/ =====>  document_scores/
+"""
 import argparse
 import pickle
 import random
@@ -27,6 +38,7 @@ class PaperAbstractDataset(Dataset):
   """
   returns the paper_id np array, input_ids tensor and attention_mask tensor
   """
+
   def __init__(self, paper_ids, input_ids, attention_masks):
     self.paper_ids = paper_ids
     self.input_ids = input_ids
@@ -49,6 +61,7 @@ logging.basicConfig(
   format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
   datefmt="%m/%d/%Y %H:%M:%S",
   level=logging.INFO)
+
 
 def main():
   parser = argparse.ArgumentParser()
@@ -87,10 +100,16 @@ def main():
     type=int,
     help="The batch size to feed the model")
 
+  parser.add_argument(
+    "--top_k",
+    default=20,
+    type=int,
+    help="Only the <top_k> tokens in every abstract are used for measuring an abstracts similarity value.")
+
   args = parser.parse_args()
 
   with open(f"similar_words/{args.similar_tokens_to_embeddings}.pickle", "rb") as f:
-    similar_token_to_embedding = np.stack(list(pickle.load(f).values())[:-1])
+    similar_token_to_embedding = np.stack(list(pickle.load(f).values())[:-1])  # np.stack is needed as the contents of the pickle file is funny, print and see
 
   input_ids = torch.load(f"inputs/{args.data_dir}/input_ids.pt")
   attention_masks = torch.load(f"inputs/{args.data_dir}/attention_masks.pt")
@@ -140,9 +159,9 @@ def main():
       logger.info("Time to find embeddings for batches {} to {}: {:} (h:mm:ss)".format(max(0, step - 100), step, format_time(time.time() - t0)))
       t0 = time.time()
     # `batch` contains two pytorch tensors and 1 numpy array:
-    #   [0]: input ids
-    #   [1]: attention masks
-    #   [2]: paper_ids
+    #   [0]: paper ids
+    #   [1]: input ids
+    #   [2]: attention masks
     paper_ids_np = np.array(batch[0], dtype=str)
     b_input_ids = batch[1].to(device)
     b_input_mask = batch[2].to(device)
@@ -164,7 +183,7 @@ def main():
     torch.cuda.empty_cache()
 
     for batch_number in range(len(embeddings_np)):
-      abstract_cosine_score = np.average(cosine_similarity(embeddings_np[batch_number], similar_token_to_embedding))
+      abstract_cosine_score = np.average(np.sort(cosine_similarity(embeddings_np[batch_number], similar_token_to_embedding))[:args.top_k])
       paper_id = paper_ids_np[batch_number]
       paper_ids_to_cosine_score[paper_id] = abstract_cosine_score
 
@@ -180,8 +199,7 @@ def main():
 
   logger.info("\n")
   logger.info("Document similarity found!")
+
+
 if __name__ == '__main__':
   main()
-
-
-
