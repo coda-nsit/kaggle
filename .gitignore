@@ -141,3 +141,9 @@ cython_debug/
 # added by Rishab
 *.png
 pickles/
+*.bin
+token_embedding_images/
+word_embeddings/
+.DS_Store
+.idea/
+
