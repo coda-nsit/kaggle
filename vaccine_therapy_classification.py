@@ -631,7 +631,7 @@ def main():
   # Training
   if args.do_train:
     input_ids, attention_masks, paper_ids_with_abstracts, labels = processor.create_input_ids__attention_masks_tensor(
-      X_train, y_train, tokenizer, args.max_seq_length)
+      args, X_train, y_train, tokenizer, args.max_seq_length)
     train_dataset = PaperAbstractDataset(paper_ids_with_abstracts, input_ids, attention_masks, labels)
     global_step, tr_loss = train(args, train_dataset, model, tokenizer)
     logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)

@@ -77,14 +77,7 @@ class Covid19Processor(object):
     logger.info(" total json files available in dataset: %d", len(json_file_names))
     return json_file_names
 
-  def preprocess_data_to_df(self, json_files, only_vaccine_paper_ids, only_therapeutic_paper_ids):
-    print("only_vaccine_paper_ids")
-    print(only_vaccine_paper_ids)
-    print("\n\n")
-    print("only_vaccine_paper_ids")
-    print(only_vaccine_paper_ids)
-    print("\n\n")
-
+  def preprocess_data_to_df(self, json_files, only_vaccine_paper_ids=None, only_therapeutic_paper_ids=None):
     empty_abstract_file_names = []
     empty_body_file_names = []
     paper_data = defaultdict(lambda: defaultdict(list))
@@ -138,7 +131,11 @@ class Covid19Processor(object):
       data.append((paper_id,
                    paper_data[paper_id]["abstract"],
                    paper_data[paper_id]["body_text"]))
-      labels.append(0 if paper_id in only_vaccine_paper_ids else 1)
+      if only_vaccine_paper_ids is not None:
+        labels.append(0 if paper_id in only_vaccine_paper_ids else 1)
+      else:
+        # append a garbage value, cause label is not needed just for consistency
+        labels.append(-1)
 
     logger.info(" total valid abstracts: %s", valid_abstracts)
     logger.info(" empty_abstract_file_names: %d", len(empty_abstract_file_names))
@@ -148,7 +145,7 @@ class Covid19Processor(object):
     logger.info(" shape of data: %s", str(data.shape))
     return train_test_split(data, labels, test_size=0.33)
 
-  def create_input_ids__attention_masks_tensor(self, X_train, y_train, tokenizer, max_seq_length):
+  def create_input_ids__attention_masks_tensor(self, args, X_train, y_train, tokenizer, max_seq_length):
     # Tokenize all of the sentences and map the tokens to their word IDs.
     abstracts = X_train["abstract"].values
     paper_ids = X_train["paper_id"].values
@@ -191,10 +188,17 @@ class Covid19Processor(object):
     # Convert the lists into tensors.
     input_ids = torch.cat(input_ids, dim=0)
     attention_masks = torch.cat(attention_masks, dim=0)
-    torch.save(input_ids, 'input_ids.pt')
-    torch.save(attention_masks, 'attention_masks.pt')
-    with open(f'paper_ids.pickle', 'wb') as handle:
+
+    # save the tensors to avoid re-computation
+    torch.save(input_ids, f"inputs/{args.output_dir}/input_ids.pt")
+    torch.save(attention_masks, f"inputs/{args.output_dir}/attention_masks.pt")
+    with open(f"inputs/{args.output_dir}/paper_ids.pickle", 'wb') as handle:
       pickle.dump(paper_ids_with_abstracts, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    with open(f'labels.pickle', 'wb') as handle:
-      pickle.dump(labels_with_abstract, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    # overwrite labels only when its not hardcoded in preprocess_data_to_df()
+    if all(labels_with_abstract) is not -1:
+      with open(f"inputs/{args.output_dir}/labels.pickle", 'wb') as handle:
+        pickle.dump(labels_with_abstract, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    else:
+      with open(f"inputs/{args.output_dir}/dummy_labels.pickle", 'wb') as handle:
+        pickle.dump(labels_with_abstract, handle, protocol=pickle.HIGHEST_PROTOCOL)
     return input_ids, attention_masks, paper_ids_with_abstracts, labels_with_abstract

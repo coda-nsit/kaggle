@@ -88,7 +88,13 @@ def main():
     help="The path to the .bin transformer model.")
 
   parser.add_argument(
-    "--out_dir",
+    "--model_name",
+    default="BertModel",
+    type=str,
+    help="The path to the .bin transformer model.")
+
+  parser.add_argument(
+    "--output_file",
     default="whole_dataset_biobert",
     type=str,
     required=True,
@@ -96,7 +102,7 @@ def main():
 
   parser.add_argument(
     "--batch_size",
-    default=16,
+    default=4,
     type=int,
     help="The batch size to feed the model")
 
@@ -117,13 +123,19 @@ def main():
     paper_ids = pickle.load(f)
 
   logger.info("%s", str(input_ids.shape))
-  logger.info('Token IDs: %s', str(input_ids[0]))
+
+  if args.model_name == "BertForSequenceClassification":
+    model = BertForSequenceClassification
+  else:
+    model = BertModel
 
   if args.model_path is None:
+    logger.info("no model_path has been provided so using 'bert-base-cased'")
     model = BertModel.from_pretrained("bert-base-cased")
   else:
-    configuration = BertConfig.from_json_file(f"{args.model_path}/bert_config.json")
-    model = BertModel.from_pretrained(f"{args.model_path}/pytorch_model.bin", config=configuration)
+    logger.info(f"loading model and config from {args.model_path}")
+    configuration = BertConfig.from_json_file(f"{args.model_path}/config.json")
+    model = model.from_pretrained(f"{args.model_path}/pytorch_model.bin", config=configuration)
   model.cuda()
 
   dataset = PaperAbstractDataset(paper_ids, input_ids, attention_masks)
@@ -166,9 +178,21 @@ def main():
     b_input_ids = batch[1].to(device)
     b_input_mask = batch[2].to(device)
 
-    embeddings, cls = model(b_input_ids,
-                            token_type_ids=None,
-                            attention_mask=b_input_mask)
+    # in case there is "label" in the batch
+    if len(batch) == 4:
+      _ = batch[3].to(device)
+
+    # embeddings, cls
+    outputs = model(b_input_ids,
+                    attention_mask=b_input_mask)
+
+    # if model is BertForSequenceClassification
+    if args.model_name == "BertForSequenceClassification":
+      cls, hidden_states = outputs
+      embeddings, layers = hidden_states[0].detach().cpu(), hidden_states[1].detach().cpu()
+      del layers
+    else:
+      embeddings, cls = outputs
 
     # move everything to cpu to save GPU space
     b_input_ids_np = b_input_ids.cpu().numpy()
@@ -192,7 +216,7 @@ def main():
     del embeddings_np
     del cls_np
 
-  with open(f"document_scores/{args.out_dir}.pickle", "wb") as f:
+  with open(f"document_scores/{args.output_file}.pickle", "wb") as f:
     pickle.dump(paper_ids_to_cosine_score, f, pickle.HIGHEST_PROTOCOL)
 
   logger.info("Total time to complete the entire process: {:} (h:mm:ss)".format(format_time(time.time() - total_t0)))

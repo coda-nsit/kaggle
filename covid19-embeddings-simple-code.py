@@ -302,7 +302,6 @@ def main():
 
   for step, batch in enumerate(dataloader):
 
-
     if step % 100 == 0:
       logger.info('======== Batch {:} / {:} ========'.format(step, len(dataloader)))
 
@@ -372,7 +371,7 @@ def main():
   del token_to_embedding_map
 
   # save the number of times each token occurs
-  with open(f'inputs/{args.data_dir}/token_count.pickle', 'wb') as handle:
+  with open(f'word_embeddings/{args.out_dir}/token_count.pickle', 'wb') as handle:
     pickle.dump(token_count, handle, protocol=pickle.HIGHEST_PROTOCOL)
   del token_count
 
