@@ -478,7 +478,7 @@ def main():
   parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
   parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
   parser.add_argument(
-    "--num_train_epochs", default=1.0, type=float, help="Total number of training epochs to perform."
+    "--num_train_epochs", default=3.0, type=float, help="Total number of training epochs to perform."
   )
   parser.add_argument(
     "--max_steps",
@@ -688,10 +688,11 @@ def main():
 
       # Evaluate
       input_ids, attention_masks, paper_ids_with_abstracts, labels = processor.create_input_ids__attention_masks_tensor(
-        X_test, y_test, tokenizer, args.max_seq_length)
+        args, X_test, y_test, tokenizer, args.max_seq_length)
       test_dataset = PaperAbstractDataset(paper_ids_with_abstracts, input_ids, attention_masks, labels)
       f1 = evaluate(args, test_dataset, model, prefix=global_step)
 
+      result = {"f1_{}".format(global_step) if global_step else "f1": f1}
       result = {"f1_{}".format(global_step) if global_step else "f1": f1}
       results.update(result)
 

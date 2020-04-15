@@ -98,17 +98,21 @@ class Covid19Processor(object):
             paper_data[paper_id]["body_text"].append(point["text"])
 
         # abstract
-        if "abstract" not in json_file:
+        title = json_file["metadata"]["title"]
+        if "abstract" not in json_file and len(title) < 10:
           empty_abstract_file_names.append(paper_id)
           stale_keys.add(tuple(json_file.keys()))
           continue
 
         # populate the abstract
-        if json_file["abstract"] == []:
+        if "abstract" in json_file and json_file["abstract"] == [] and len(title) < 10:
           empty_abstract_file_names.append(paper_id)
         else:
-          for point in json_file["abstract"]:
-            paper_data[paper_id]["abstract"].append(point["text"])
+          if len(title) > 10:
+            paper_data[paper_id]["abstract"] = [title]
+          if "abstract" in json_file:
+            for point in json_file["abstract"]:
+              paper_data[paper_id]["abstract"].append(point["text"])
 
     data = []
     labels = []

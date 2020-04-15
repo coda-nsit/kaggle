@@ -19,7 +19,7 @@ python3 covid19-embeddings-simple-code.py \
     --max_seq_length 512 \
     --batch_size 8 \
     --out_dir "whole_dataset_biobert" \
-    --seed_words "vaccine" "vaccines" "vaccination" "vaccinations" \
+    --seed_words "vaccine" "vaccines" "vaccination" "vaccinations" " cov" " Cov" " CoV" " COV" \
     --model_path "/home/rbanerj8/biobert"
 python3 similarity-from-embeddings.py \
   --data_dir "whole_dataset_biobert" \
@@ -33,28 +33,6 @@ python3 find_document_similarity.py \
   --output_file "whole_dataset_biobert" \
   --top_k 50
 
-# only vaccines + biobert
-python3 covid19-embeddings-simple-code.py \
-    --have_input_data \
-    --data_dir "only_vaccines_biobert" \
-    --max_seq_length 512 \
-    --batch_size 8 \
-    --filter_file "Papers_with_only_vaccines_in_abstract.txt" \
-    --out_dir "only_vaccines_biobert" \
-    --seed_words "vaccine" "vaccines" "vaccination" "vaccinations" \
-    --model_path "/home/rbanerj8/biobert"
-python3 similarity-from-embeddings.py \
-  --data_dir "only_vaccines_biobert" \
-  --distance_metric "cosine" \
-  --output_file "closest_word_to_embeddings_only_vaccines_biobert" \
-  --k_similar 1000
-python3 find_document_similarity.py \
-  --similar_tokens_to_embeddings "closest_word_to_embeddings_only_vaccines" \
-  --data_dir "only_vaccines_biobert" \
-  --model_path "/home/rbanerj8/biobert" \
-  --output_file "only_vaccines_biobert" \
-  --top_k 50
-
 # whole dataset + bert
 python3 covid19-embeddings-simple-code.py \
     --have_input_data \
@@ -62,17 +40,18 @@ python3 covid19-embeddings-simple-code.py \
     --max_seq_length 512 \
     --batch_size 8 \
     --out_dir "whole_dataset" \
-    --seed_words "vaccine" "vaccines" "vaccination" "vaccinations"
+    --seed_words "vaccine" "vaccines" "vaccination" "vaccinations" " cov" " Cov" " CoV" " COV"
 python3 similarity-from-embeddings.py \
-  --data_dir "fine_tuned_result" \
+  --data_dir "whole_dataset" \
   --distance_metric "cosine" \
-  --output_file "closest_word_to_embeddings_only_covid_fine_tuned_bert" \
+  --output_file "closest_word_to_embeddings_whole_dataset" \
   --k_similar 1000
 python3 find_document_similarity.py \
-  --similar_tokens_to_embeddings "closest_word_to_embeddings_whole_dataset_bert" \
+  --similar_tokens_to_embeddings "closest_word_to_embeddings_whole_dataset" \
   --data_dir "whole_dataset" \
   --output_file "whole_dataset" \
-  --top_k 50
+  --top_k 50 \
+  --batch_size 8
 
 
 ##### finetuning
@@ -90,20 +69,21 @@ python3 vaccone_therapy_classification.py \
     --per_gpu_train_batch_size 4 \
     --per_gpu_train_eval_size 4 \
     --save_steps 500 \
+    --num_train_epochs 3
 # get embeddings from the fine-tuned model
 python3 embeddings_from_fine_tuned_model.py \
     --model_and_config_dir "fine_tuned_result" \
     --data_dir "extracted" \
     --output_dir "fine_tuned_result" \
-    --seed_words "vaccine" "vaccines" "vaccination" "vaccinations" \
+    --seed_words "vaccine" "vaccines" "vaccination" "vaccinations" " cov" " Cov" " CoV" " COV"
 python3 similarity-from-embeddings.py \
   --data_dir "fine_tuned_result" \
   --distance_metric "cosine" \
-  --output_file "closest_word_to_embeddings_only_covid_fine_tuned_bert" \
+  --output_file "closest_word_to_embeddings_whole_dataset_fine_tuned" \
   --k_similar 1000
 python3 find_document_similarity.py \
     --model_name "BertForSequenceClassification" \
-    --similar_tokens_to_embeddings "closest_word_to_embeddings_only_covid_fine_tuned_bert" \
+    --similar_tokens_to_embeddings "closest_word_to_embeddings_whole_dataset_fine_tuned" \
     --data_dir "fine_tuned_result" \
     --model_path "/home/rbanerj8/covid/fine_tuned_result" \
     --output_file "fine_tuned_result" \
